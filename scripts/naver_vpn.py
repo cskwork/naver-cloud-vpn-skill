@@ -646,13 +646,16 @@ def management_port_open() -> bool:
 
 
 def sudo_ready() -> bool:
-    result = subprocess.run(
-        ["/usr/bin/sudo", "-n", "true"],
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        result = subprocess.run(
+            ["/usr/bin/sudo", "-n", "true"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except PermissionError as error:
+        raise RuntimeSafetyError("sudo authorization could not be checked") from error
     return result.returncode == 0
 
 
@@ -756,7 +759,11 @@ def collect_metadata(version: str) -> ClientMetadata:
     return ClientMetadata(version, "darwin", os_version, macs)
 
 
-def _monitor_openvpn(command: list[str], authentication_file: Path) -> int:
+def _monitor_openvpn(
+    command: list[str],
+    authentication_file: Path,
+    on_connected: Callable[[], None] | None = None,
+) -> int:
     child: subprocess.Popen[str] | None = None
     blocked = {signal.SIGINT, signal.SIGTERM, signal.SIGHUP}
     previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, blocked)
@@ -771,6 +778,9 @@ def _monitor_openvpn(command: list[str], authentication_file: Path) -> int:
             text=True,
             errors="replace",
             bufsize=1,
+            # The child inherits our blocked mask across exec. Restore it in
+            # this single-threaded CLI's child before starting sudo/OpenVPN.
+            preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask),
         )
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         mask_restored = True
@@ -780,6 +790,8 @@ def _monitor_openvpn(command: list[str], authentication_file: Path) -> int:
             if "Initialization Sequence Completed" in line and not connected:
                 connected = True
                 authentication_file.unlink(missing_ok=True)
+                if on_connected is not None:
+                    on_connected()
                 print("CONNECTED", flush=True)
             elif "auth-failure" in line or "AUTH_FAILED" in line:
                 print("AUTH_FAILED", flush=True)
@@ -790,17 +802,25 @@ def _monitor_openvpn(command: list[str], authentication_file: Path) -> int:
         if not mask_restored:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         if child is not None and child.poll() is None:
-            child.send_signal(signal.SIGINT)
+            try:
+                child.send_signal(signal.SIGTERM)
+            except PermissionError:
+                stopped = subprocess.run(
+                    ["/usr/bin/sudo", "-n", "/bin/kill", "-TERM", str(child.pid)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
+                if stopped.returncode != 0:
+                    raise RuntimeSafetyError("OpenVPN could not be stopped with cached sudo")
             try:
                 child.wait(timeout=8)
             except subprocess.TimeoutExpired:
-                child.terminate()
-                try:
-                    child.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait(timeout=3)
+                raise RuntimeSafetyError("OpenVPN did not stop; inspect it before retrying")
         authentication_file.unlink(missing_ok=True)
+        if child is not None and child.stdout is not None and hasattr(child.stdout, "close"):
+            child.stdout.close()
 
 
 @contextlib.contextmanager
@@ -820,7 +840,12 @@ def termination_guard(signal_api=signal):
             signal_api.signal(signum, handler)
 
 
-def connect(credentials: Credentials, profile: ProfileInfo, version: str) -> int:
+def connect(
+    credentials: Credentials,
+    profile: ProfileInfo,
+    version: str,
+    on_connected: Callable[[Path], None] | None = None,
+) -> int:
     cleanup_runtime(RUNTIME_DIR)
     result = authenticate(
         HttpsTransport(), profile, credentials, collect_metadata(version)
@@ -850,7 +875,11 @@ def connect(credentials: Credentials, profile: ProfileInfo, version: str) -> int
                 auth_file(RUNTIME_DIR, credentials.username, secret)
             )
             command = build_openvpn_command(OPENVPN, active_profile, authentication_file)
-            return _monitor_openvpn(command, authentication_file)
+            return _monitor_openvpn(
+                command,
+                authentication_file,
+                (lambda: on_connected(active_profile)) if on_connected is not None else None,
+            )
 
 
 def build_parser() -> argparse.ArgumentParser:
