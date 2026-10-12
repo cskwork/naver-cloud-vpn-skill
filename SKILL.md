@@ -1,40 +1,44 @@
 ---
 name: naver-cloud-vpn
-description: Use when a user asks to inspect, verify credentials for, connect, or troubleshoot the installed NAVER Cloud SSL VPN client on macOS without GUI automation.
+description: Inspect, configure, connect, switch, or disconnect existing NAVER Cloud SSL VPN profiles on macOS using the signed installed client; supports one persistent dev or audit tunnel.
 ---
 
 # NAVER Cloud VPN
 
-Use the bundled Python script. It mirrors the installed client's existing-profile flow without Computer Use, AppleScript, shell interpolation, disabled TLS, or leaving its temporary OpenVPN authentication file behind.
+Use `scripts/vpn.py` for the default dev (`vpn2361`) and audit (`vpn2203`) profiles. Production is excluded. Run commands from the skill directory. For other installed profiles, use the generic `scripts/naver_vpn.py` connector described in README.md.
 
-## Authorization
+## Authorization and secrets
 
-- `--check` is read-only. It does not read `.env` or authenticate.
-- `--auth-check` sends the configured ID and password to the TLS-verified endpoint specified by the installed profile. Run it only when the user explicitly requests credential verification.
-- Ask for confirmation immediately before `--connect`. It changes network access and invokes the bundled OpenVPN through cached `sudo` authorization.
-- Never accept credentials in chat, command arguments, process environment variables, or logs.
-
-## Local configuration
-
-Store this file at `~/.config/naver-cloud-vpn/.env` with mode `0600`:
-
-```dotenv
-NAVER_VPN_PROFILE=Example VPN
-NAVER_VPN_USERNAME=your-id
-NAVER_VPN_PASSWORD=your-password
-```
-
-Use an exact alias from the installed client's `alias.json`. OTP is never stored. If the server requires OTP, `--connect` asks through `getpass` in the user's terminal and refuses non-interactive input.
+- An explicit user request to connect, switch, or disconnect authorizes that network change. Do not ask again for the same authorized action.
+- `--status` is read-only. It reads no credentials, performs no authentication, and reports process identity, management state, and mode separately.
+- `--setup` only saves ID/password locally. Enter secrets directly in the user's Mac Terminal through `getpass`; never accept or expose them in chat, command arguments, environment variables, or logs.
+- Store credentials only in `~/.config/naver-cloud-vpn/{dev,audit}.env`, mode `0600`, in a private directory. OTP is interactive and never stored persistently. A sudo prompt needs the **Mac login password**.
 
 ## Commands
 
 ```bash
-python3 ~/.codex/skills/naver-cloud-vpn/scripts/naver_vpn.py --check --profile "Example VPN"
-python3 ~/.codex/skills/naver-cloud-vpn/scripts/naver_vpn.py --auth-check
-sudo -v  # user runs this in a terminal immediately before an approved connection
-python3 ~/.codex/skills/naver-cloud-vpn/scripts/naver_vpn.py --connect
+python3 scripts/vpn.py --status
+python3 scripts/vpn.py --setup
+python3 scripts/vpn.py audit
+python3 scripts/vpn.py dev
+python3 scripts/vpn.py --disconnect
 ```
 
-The connection stays attached to the command. `Ctrl+C` stops it. The script refuses an occupied OpenVPN management port and removes temporary profile and authentication files on every handled exit.
+A successful default connection runs the installed OpenVPN binary in its native daemon mode. The command returns only after the exact process identity, management PID, management `CONNECTED` state, and initialization-complete log marker agree. Closing Terminal afterward keeps that selected tunnel running. Only **one of dev or audit** runs at a time; switching gracefully stops the old tunnel before starting the new one. No Python supervisor or boot-time service is installed.
 
-Treat `AUTH_OK` as credential proof only. Treat `CONNECTED` as tunnel-process proof only. Route behavior remains unverified unless separately checked.
+Running the already connected environment returns without OTP, sudo, or restarting it. An older foreground connection remains Terminal-dependent: the command says so. Migrate it only through an authorized explicit reconnect:
+
+```bash
+python3 scripts/vpn.py dev --reconnect
+```
+
+## Guardrails and failures
+
+- Validate the installed profile, selected credential file, API TLS, app signature, and signer. Never disable TLS verification or deep, strict code-signature checks.
+- OpenVPN accepts one management client. If the NAVER app owns it, stop before sudo/authentication or network changes and ask the user to click **Disconnect once in the NAVER app**, then rerun the requested command. Never take over the GUI connection.
+- Disconnect only a verified dev/audit process whose management `pid` matches its executable/config/start identity. Recheck before `signal SIGTERM`, then require actual exit within 10 seconds. Never force kill. Unknown, production, ambiguous, and multiple VPN processes are refused.
+- An app-generated `Contents/vpn/auth-file.txt` is the only tolerated pre-disconnect signature mismatch. With no tunnel remaining, move that regular, user-owned, single-link file without reading it into a private `app-auth-backup-*` directory, set `0600`, then require full strict signature verification.
+- Daemon startup is bounded to 90 seconds, plus bounded graceful cleanup. A zero launcher exit is not connection proof. Remove the temporary OTP file on success and failure. Keep private profile/log files only while the tunnel or an uncertain launcher may still need them; remove them after verified disconnect.
+- A pending startup record fences new transitions while its launcher is alive or cannot be identified. Report `pending`/unknown rather than disconnected. Preserve ownership and private files after an unverified stop; never overwrite that record with a new launch.
+- ID/password and OTP authentication happen after the old tunnel stops. Failed authentication leaves it disconnected; there is no automatic restoration. Server session expiry or a network interruption can still end a daemon tunnel; a fresh OTP may be needed to reconnect.
+- `CONNECTED` proves tunnel initialization, not the identity of services behind private addresses. Verify the target environment independently when needed.
