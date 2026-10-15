@@ -141,8 +141,10 @@ def management_control(connection: Connection) -> ManagementControl:
 
 def capture(arguments: list[str]) -> str:
     try:
+        # Fixed locale: `ps -o lstart=` is a process identity key and must read the same from any Terminal.
         result = subprocess.run(arguments, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, text=True, check=False)
+                                stderr=subprocess.PIPE, text=True, check=False,
+                                env={**os.environ, "LC_ALL": "C", "LANG": "C"})
     except OSError as error:
         raise vpn.RuntimeSafetyError("process inspection is not permitted in this environment") from error
     if result.returncode:

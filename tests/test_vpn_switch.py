@@ -438,6 +438,17 @@ class SwitchTests(unittest.TestCase):
              self.assertRaises(vpn.RuntimeSafetyError):
             switch.capture(["/bin/ps", "-p", "47420", "-o", "args="])
 
+    def test_process_start_time_does_not_depend_on_caller_locale(self):
+        # 2026-10-15: a tunnel started from a Korean-locale Terminal recorded "2026년 10월 15일 ..." and a
+        # later English-locale status call read "Thu Oct 15 ..." for the same process, so it was "unknown".
+        pid = str(os.getpid())
+        with mock.patch.dict(os.environ, {"LANG": "ko_KR.UTF-8", "LC_ALL": "ko_KR.UTF-8"}):
+            korean_caller = switch.capture(["/bin/ps", "-p", pid, "-o", "lstart="])
+        with mock.patch.dict(os.environ, {"LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"}):
+            english_caller = switch.capture(["/bin/ps", "-p", pid, "-o", "lstart="])
+        self.assertEqual(korean_caller, english_caller)
+        self.assertRegex(korean_caller, r"^[A-Z][a-z]{2} [A-Z][a-z]{2} ")
+
 
 if __name__ == "__main__":
     unittest.main()
