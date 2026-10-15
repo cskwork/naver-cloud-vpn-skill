@@ -1,0 +1,5 @@
+#!/bin/zsh
+# 이 파일이 있는 스킬 폴더 기준으로 실행한다(~/.local/bin/vpn 심볼릭 링크로 불려도 원본 경로로 풀린다).
+PY=/opt/homebrew/opt/python@3.14/bin/python3.14
+[[ -x $PY ]] || PY=python3
+exec $PY "${0:A:h}/scripts/vpn.py" "$@"

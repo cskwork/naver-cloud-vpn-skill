@@ -1,6 +1,6 @@
 ---
 name: naver-cloud-vpn
-description: Inspect, configure, connect, switch, or disconnect existing NAVER Cloud SSL VPN profiles on macOS using the signed installed client; supports one persistent dev or audit tunnel.
+description: VPN for AIDT dev/audit private network (10.0.x): status, connect, switch, or disconnect the NAVER Cloud SSL VPN dev or audit tunnel from the terminal. Use when ssh/connect.sh, kubectl, or the dev/audit DB times out on 10.0.x, or the user asks "vpn 연결", "심사 DB 터널", "개발계/심사계 VPN". Production excluded.
 ---
 
 # NAVER Cloud VPN
@@ -23,6 +23,8 @@ python3 scripts/vpn.py audit
 python3 scripts/vpn.py dev
 python3 scripts/vpn.py --disconnect
 ```
+
+Agent flow: the agent cannot type the Mac password or OTP. Run `vpn --status` (`~/.local/bin/vpn` links to this folder's `vpn`); if `active` is empty, open the user's Terminal with `open -a Terminal <skill>/dev.command` (audit: `audit.command`), ask the user for OTP, then poll `vpn --status` until `CONNECTED`. The terminal command is the only connect path: GUI app clicks and computer-use stay out of it.
 
 A successful default connection runs the installed OpenVPN binary in its native daemon mode. The command returns only after the exact process identity, management PID, management `CONNECTED` state, and initialization-complete log marker agree. Closing Terminal afterward keeps that selected tunnel running. Only **one of dev or audit** runs at a time; switching gracefully stops the old tunnel before starting the new one. No Python supervisor or boot-time service is installed.
 
