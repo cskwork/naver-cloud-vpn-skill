@@ -24,7 +24,7 @@ python3 scripts/vpn.py dev
 python3 scripts/vpn.py --disconnect
 ```
 
-Agent flow: the agent cannot type the Mac password or OTP. Run `vpn --status` (`~/.local/bin/vpn` links to this folder's `vpn`); if `active` is empty, open the user's Terminal with `open -a Terminal <skill>/dev.command` (audit: `audit.command`), ask the user for OTP, then poll `vpn --status` until `CONNECTED`. The terminal command is the only connect path: GUI app clicks and computer-use stay out of it.
+Agent flow: the agent cannot type the Mac password or OTP. Run `vpn --status` (`~/.local/bin/vpn` links to this folder's `vpn`); if `active` is empty, open the user's Terminal with `open -a Terminal <skill>/dev.command` (audit: `audit.command`). Then report what is already done, say that the OTP is needed in that Terminal, and end the turn. Do not wait in a polling loop: the user may not see the request, and work that finished meanwhile stays unreported (an agent once polled for 35 minutes while the deployment it had started was already done). When the user replies, run `vpn --status` once and continue only if `CONNECTED`. The terminal command is the only connect path: GUI app clicks and computer-use stay out of it.
 
 A successful default connection runs the installed OpenVPN binary in its native daemon mode. The command returns only after the exact process identity, management PID, management `CONNECTED` state, and initialization-complete log marker agree. Closing Terminal afterward keeps that selected tunnel running. Only **one of dev or audit** runs at a time; switching gracefully stops the old tunnel before starting the new one. No Python supervisor or boot-time service is installed.
 
