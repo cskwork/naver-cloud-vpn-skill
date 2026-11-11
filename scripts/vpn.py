@@ -28,7 +28,11 @@ STATE_FILE = CONFIG_DIR / "connection.json"
 APP_AUTH_FILE = vpn.APP_PATH / "Contents/vpn/auth-file.txt"
 
 
-def transition_lock() -> int:
+class TransitionBusy(vpn.RuntimeSafetyError):
+    pass
+
+
+def transition_lock(wait_seconds: float = 0) -> int:
     vpn.ensure_private_runtime(CONFIG_DIR)
     descriptor = os.open(CONFIG_DIR / "transition.lock",
                          os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -37,10 +41,15 @@ def transition_lock() -> int:
         if (not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != os.getuid()
                 or metadata.st_nlink != 1 or stat.S_IMODE(metadata.st_mode) & 0o077):
             raise vpn.RuntimeSafetyError("VPN transition lock is unsafe")
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise vpn.RuntimeSafetyError("another VPN transition is in progress") from error
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as error:
+                if time.monotonic() >= deadline:
+                    raise TransitionBusy("another VPN transition is in progress") from error
+                time.sleep(0.05)
         return descriptor
     except BaseException:
         os.close(descriptor)
@@ -428,7 +437,10 @@ def cleanup_connection(connection: Connection) -> None:
 def status() -> int:
     report: dict[str, object] = {"active": [], "credentials": {}}
     failed = False
+    lock = None
     try:
+        # OpenVPN permits only one management client; never probe during a transition.
+        lock = transition_lock()
         state = load_state()
         if state is not None and state.pid == 0:
             report["startup"] = "pending"
@@ -446,9 +458,14 @@ def status() -> int:
             finally:
                 if control is not None:
                     control.close()
-    except vpn.VpnError as error:
-        report["process_error"] = str(error)
+    except TransitionBusy:
+        report["startup"] = "pending"
+    except (vpn.VpnError, OSError) as error:
+        report["process_error"] = str(error) if isinstance(error, vpn.VpnError) else "status unavailable"
         failed = True
+    finally:
+        if lock is not None:
+            os.close(lock)
     try:
         report["signature"] = installation_preflight()
     except (vpn.VpnError, OSError, plistlib.InvalidFileException) as error:
@@ -484,7 +501,8 @@ def main(argv: list[str] | None = None) -> int:
     control: ManagementControl | None = None
     try:
         if not args.setup:
-            lock = transition_lock()
+            # Allow a brief read-only status probe to finish before a user transition.
+            lock = transition_lock(wait_seconds=3)
         state = load_state()
         active = processes(state)
         installation_preflight()

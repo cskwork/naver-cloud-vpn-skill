@@ -50,9 +50,13 @@ To install, copy `build/AIDT VPN.app` into `~/Applications` using Finder. Move a
 
 The app bundles this repository's VPN scripts; no agent skill installation or original checkout is needed after copying the app. Python 3.10+, the signed NAVER VPN app, and existing profiles are still required. Credentials remain outside the bundle in `~/.config/naver-cloud-vpn/`. This is a locally ad-hoc signed build, not a notarized downloadable release.
 
-The app does not show connection status. Quitting it does not disconnect the VPN. Login auto-start is optional through macOS System Settings → General → Login Items. Hold Command and drag the menu bar item to reposition it.
+The menu bar shows a colored dot and the current development (`개발`) or audit (`심사`) environment. Green means a verified `CONNECTED` response, gray means disconnected, orange means startup/connection in progress, and red means status could not be confirmed. Unknown or failed checks never count as connected. The menu also shows a text status and checks the connected environment, so color is not the only signal.
 
-Build validation checks the bundle signature, menu creation, and bundled command paths. To check real Terminal dispatch without switching VPN, run `"build/AIDT VPN.app/Contents/MacOS/AIDTVPN" --check-terminal /absolute/path/to/safe.command` with a harmless executable script. A successful dispatch is not VPN connection proof.
+Under **표시 설정**, choose each state's color from six colors, toggle environment names, and choose a 5/10/30/60-second refresh interval (default: 10 seconds). Settings persist locally; **기본 설정 복원** resets them. **지금 새로고침** performs an immediate read-only check. The tooltip shows the last check time. Status polling does not authenticate or switch VPNs; it uses the existing `--status` command. A failed/timed-out check shows red, including when another client owns the VPN management socket. Status checks share the local transition lock: while a transition runs, polling skips the management socket and shows connecting. A transition waits up to 3 seconds for a brief status check before failing explicitly if still busy.
+
+Quitting the app does not disconnect the VPN. Login auto-start is optional through macOS System Settings → General → Login Items. Hold Command and drag the menu bar item to reposition it.
+
+Build validation checks the bundle signature, four status renderings, preference persistence/reset, and bundled command paths. Run `zsh app/test.sh` for status-decoding and probe tests. Run `"build/AIDT VPN.app/Contents/MacOS/AIDTVPN" --check-live` to check the actual read-only status path. To check real Terminal dispatch without switching VPN, run `"build/AIDT VPN.app/Contents/MacOS/AIDTVPN" --check-terminal /absolute/path/to/safe.command` with a harmless executable script. A successful dispatch is not VPN connection proof.
 
 ## Initial NAVER app disconnect
 

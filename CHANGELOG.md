@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show verified VPN connection state and development/audit environment in the menu bar.
+- Add persistent per-state colors, environment-name visibility, refresh intervals, and reset settings.
+- Show failed or timed-out status checks explicitly rather than preserving stale connected status.
+
 - Add an optional macOS menu bar app with development/audit Terminal shortcuts.
 - Bundle the existing VPN commands and provide a reproducible local build; credentials and OTP remain in the existing Terminal flow.
 

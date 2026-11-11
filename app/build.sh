@@ -10,7 +10,7 @@ fi
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources/vpn/scripts"
 cp "$repo/dev.command" "$repo/audit.command" "$repo/vpn" "$app/Contents/Resources/vpn/"
 cp "$repo"/scripts/*.py "$app/Contents/Resources/vpn/scripts/"
-xcrun swiftc main.swift -O -framework AppKit -o "$app/Contents/MacOS/AIDTVPN"
+xcrun swiftc main.swift Status.swift -O -framework AppKit -o "$app/Contents/MacOS/AIDTVPN"
 cat > "$app/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -19,8 +19,8 @@ cat > "$app/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.cskwork.aidt-vpn-menubar</string>
 <key>CFBundleName</key><string>AIDT VPN</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleShortVersionString</key><string>1.1</string>
+<key>CFBundleVersion</key><string>2</string>
 <key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

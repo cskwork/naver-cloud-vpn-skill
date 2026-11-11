@@ -290,6 +290,36 @@ class SwitchTests(unittest.TestCase):
                                            "mode": "foreground", "state": "unknown"}])
         self.assertNotIn("config", report["active"][0])
 
+    def test_status_during_transition_skips_management_and_reports_pending(self):
+        descriptor = switch.transition_lock()
+        output = io.StringIO()
+        try:
+            with mock.patch.object(switch, "processes") as processes, \
+                 mock.patch.object(switch, "management_control") as management, \
+                 mock.patch.object(switch, "installation_preflight", return_value="valid"), \
+                 contextlib.redirect_stdout(output):
+                self.assertEqual(switch.status(), 0)
+            processes.assert_not_called()
+            management.assert_not_called()
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["startup"], "pending")
+            self.assertEqual(report["active"], [])
+        finally:
+            os.close(descriptor)
+
+    def test_transition_waits_for_brief_status_probe(self):
+        descriptor = switch.transition_lock()
+        release = threading.Timer(0.1, os.close, args=[descriptor])
+        release.start()
+        acquired = None
+        try:
+            acquired = switch.transition_lock(wait_seconds=1)
+        finally:
+            release.join()
+            if acquired is not None:
+                os.close(acquired)
+        self.assertIsNotNone(acquired)
+
     def test_stop_uses_only_pid_verified_management_sigterm(self):
         connection = switch.Connection(47420, "dev", "date", "config", "auth", False)
         control = mock.Mock()
