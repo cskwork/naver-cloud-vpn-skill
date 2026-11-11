@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add an optional macOS menu bar app with development/audit Terminal shortcuts.
+- Bundle the existing VPN commands and provide a reproducible local build; credentials and OTP remain in the existing Terminal flow.
+
 ## 0.1.0 — 2026-10-13
 
 Initial release for existing NAVER Cloud SSL VPN profiles on macOS.

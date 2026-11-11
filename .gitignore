@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 runtime/
 .DS_Store
+build/

@@ -36,6 +36,24 @@ python3 scripts/vpn.py dev --reconnect
 
 To install as an agent skill, place the repository under your agent's skills directory. `SKILL.md` is the entry point. The Python commands also work independently of an agent.
 
+## macOS menu bar app
+
+The optional native app puts **VPN** in the menu bar. Choose development or audit to open its connection command in Apple Terminal. Passwords and OTP stay in Terminal.
+
+```bash
+# Requires Xcode Command Line Tools (xcode-select --install)
+zsh app/build.sh
+open "build/AIDT VPN.app"
+```
+
+To install, copy `build/AIDT VPN.app` into `~/Applications` using Finder. Move any existing app aside before replacing it. The build script also refuses to overwrite an existing build output.
+
+The app bundles this repository's VPN scripts; no agent skill installation or original checkout is needed after copying the app. Python 3.10+, the signed NAVER VPN app, and existing profiles are still required. Credentials remain outside the bundle in `~/.config/naver-cloud-vpn/`. This is a locally ad-hoc signed build, not a notarized downloadable release.
+
+The app does not show connection status. Quitting it does not disconnect the VPN. Login auto-start is optional through macOS System Settings → General → Login Items. Hold Command and drag the menu bar item to reposition it.
+
+Build validation checks the bundle signature, menu creation, and bundled command paths. To check real Terminal dispatch without switching VPN, run `"build/AIDT VPN.app/Contents/MacOS/AIDTVPN" --check-terminal /absolute/path/to/safe.command` with a harmless executable script. A successful dispatch is not VPN connection proof.
+
 ## Initial NAVER app disconnect
 
 OpenVPN permits a single management client. If the NAVER app is connected, click **Disconnect once in that app**, then run the wrapper. The wrapper refuses an occupied management connection before requesting sudo or changing the VPN. It does not automate the GUI or take over its socket. Later wrapper-owned connections can be switched through their verified management connection.
